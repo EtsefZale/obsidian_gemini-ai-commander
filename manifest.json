@@ -1,0 +1,10 @@
+{
+    "id": "gemini-ai-commander",
+    "name": "Gemini AI Commander",
+    "version": "1.0.0",
+    "minAppVersion": "1.0.0",
+    "description": "Inspired by \"ai-commander\" by Simon Yang • A simple AI assistant to help with your Obsidian notes via the Google Gemini API. (This is my first plugin, be nice plz '^^) • Forks & inspirations allowed WITH CREDIT",
+    "author": "Etsef Zale",
+    "authorUrl": "https://ender.website",
+    "isDesktopOnly": false
+}
