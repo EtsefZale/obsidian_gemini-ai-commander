@@ -2,7 +2,8 @@
 
 A simple, fast, and highly customizable AI assistant for your Obsidian vault, powered by the Google Gemini API. Process your notes, summarize audio lectures, and chat with your files—all without leaving your workflow.
 
-*This is my first Obsidian plugin EVER, so I hope you enjoy it!* <small><i><s>(in all honesty im just surprised it even works lol)</s></i></small>
+*This is my first Obsidian plugin EVER, so I hope you enjoy it!*
+<small><i><s>(in all honesty im just surprised it even works lol)</s></i></small>
 
 ---
 
