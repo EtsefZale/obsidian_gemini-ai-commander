@@ -57,20 +57,24 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                     this.plugin.settings.apiKey = value;
                     await this.plugin.saveSettings();
                 }));
-
+                
         new obsidian.Setting(containerEl)
             .setName('Gemini Model')
             .setDesc('Choose the engine. Free Tier users should stick to Flash models to avoid hitting strict rate limits.')
             .addDropdown(drop => drop
                 .addOption('gemini-2.5-flash', 'Gemini 2.5 Flash (Default, Fast, Free-Tier Friendly)')
-                .addOption('gemini-2.5-pro', 'Gemini 2.5 Pro (Complex Reasoning, Lower Free Limits)')
-                .addOption('gemini-3-flash', 'Gemini 3 Flash (Latest Gen, Fast)')
-                .addOption('gemini-3-pro', 'Gemini 3 Pro (Latest Gen, Advanced)')
+                .addOption('gemini-2.5-pro', 'Gemini 2.5 Pro (Complex Reasoning, Paid Tier Required)')
+                .addOption('gemini-3-flash-preview', 'Gemini 3 Flash (Latest Gen, Fast)')
+                .addOption('gemini-3-pro-preview', 'Gemini 3 Pro (Latest Gen, Paid Tier Required)')
                 .setValue(this.plugin.settings.model)
                 .onChange(async (value) => {
                     this.plugin.settings.model = value;
                     await this.plugin.saveSettings();
                 }));
+
+        // --- NEW DISCLAIMER BLOCK ---
+        new obsidian.Setting(containerEl)
+            .setDesc('⚠️ NOTE: Google heavily restricts the "Pro" models on the Free Tier. If you get an "Error 429: Rate limit exceeded" immediately when using a Pro model, you must either switch back to a Flash model or upgrade your API key to a Pay-As-You-Go billing account in Google AI Studio.');
 
         new obsidian.Setting(containerEl)
             .setName('Temperature')
@@ -387,6 +391,7 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
             const response = await obsidian.requestUrl({
                 url: `https://generativelanguage.googleapis.com/v1beta/models/${this.settings.model}:generateContent?key=${this.settings.apiKey}`,
                 method: 'POST',
+                throw: false, // <--- ADD THIS LINE HERE
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     systemInstruction: { parts: [{ text: this.settings.systemInstruction }] },
