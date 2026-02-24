@@ -278,7 +278,6 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
 
     // --- CENTRALIZED PROCESSING LOGIC ---
     async processNotes(editor, view, action, customInstruction) {
-        // ERROR CATCH 1: No API Key
         if (!this.settings.apiKey) {
             new obsidian.Notice('Error: Please set your Gemini API Key in the settings before running commands.');
             return;
@@ -288,21 +287,20 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
         let noticeText = `Sending to ${this.settings.model}...`;
         const rawText = editor.getValue();
         
-        // Setup Loading Blocks
         const insertLoadingText = "\n\n> [!info] ⏳ Gemini is thinking...\n\n";
         const replaceLoadingText = "> [!info] ⏳ Gemini is rewriting your note...\n\n";
 
-        // Global regex to catch multiple files (PDFs, Images, Audio)
-        const fileRegex = /!\[\[(.*?\.(mp3|mp4|mpeg|mpga|m4a|wav|webm|png|jpg|jpeg|webp|heic|pdf))\]\]/ig;
+        // Upgraded regex catches both Wiki-links ![[...]] and standard MD links ![...](...)
+        const fileRegex = /!(?:\[\[(.*?)\]\]|\[.*?\]\((.*?)\))/ig;
         let hasFiles = false;
         let embedsToKeep = "";
+        let embeddedMarkdown = ""; 
         let match;
 
         const noInstruction = (!customInstruction || customInstruction.trim() === '');
         const tempMatch = rawText.match(fileRegex);
         const noContent = (rawText.trim() === '' && !tempMatch);
 
-        // --- EMPTY NOTE SAFEGUARDS ---
         if (action === 'Chat' && noInstruction) {
             editor.replaceSelection(WELCOME_MESSAGE + "\n\n");
             return;
@@ -317,13 +315,11 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
             return;
         }
 
-        // 1. CHAT MODE (Ignores file content)
         if (action === 'Chat') {
             new obsidian.Notice(`Asking ${this.settings.model}...`);
             parts.push({ text: `User Query: ${customInstruction.trim()}` });
             editor.replaceSelection(insertLoadingText);
         } 
-        // 2. FILE PROCESSING MODE
         else {
             if (customInstruction && customInstruction.trim() !== '') {
                 noticeText = `Sending to ${this.settings.model} with custom instructions...`;
@@ -336,32 +332,85 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
                 hasFiles = true;
                 embedsToKeep += match[0] + "\n"; 
                 
-                const filename = match[1];
-                const extension = match[2].toLowerCase();
-                const file = this.app.metadataCache.getFirstLinkpathDest(filename, view.file.path);
+                // Grab whichever link style the regex found (Wiki or MD)
+                const rawLink = match[1] || match[2];
+                
+                // 1. Split at '|' to remove aliases
+                // 2. Split at '#' to remove block/heading references
+                // 3. decodeURIComponent to fix standard MD links that use %20 for spaces
+                const cleanLink = decodeURIComponent(rawLink.split('|')[0].split('#')[0].trim());
+                
+                const file = this.app.metadataCache.getFirstLinkpathDest(cleanLink, view.file.path);
                 
                 if (file) {
-                    new obsidian.Notice(`Processing file: ${filename}...`);
-                    const binary = await this.app.vault.readBinary(file);
-                    const base64 = obsidian.arrayBufferToBase64(binary);
-                    
-                    let mimeType = 'application/octet-stream';
-                    if (['png', 'jpg', 'jpeg', 'webp', 'heic'].includes(extension)) {
-                        mimeType = extension === 'jpg' ? 'image/jpeg' : `image/${extension}`;
-                    } else if (extension === 'pdf') {
-                        mimeType = 'application/pdf';
-                    } else {
-                        mimeType = 'audio/' + extension;
-                        if (extension === 'm4a') mimeType = 'audio/x-m4a';
-                        else if (extension === 'mp4') mimeType = 'video/mp4';
+                    const extension = file.extension.toLowerCase();
+
+                    // --- EXCALIDRAW IN-MEMORY RENDER (IPAD OS BYPASS) ---
+                    const excalidrawPlugin = this.app.plugins.plugins['obsidian-excalidraw-plugin'];
+                    if (excalidrawPlugin && excalidrawPlugin.ea && excalidrawPlugin.ea.isExcalidrawFile(file)) {
+                        new obsidian.Notice(`Rendering drawing directly from memory: ${file.name}...`);
+                        
+                        // Force save the active drawing so the text file updates instantly
+                        this.app.commands.executeCommandById('obsidian-excalidraw-plugin:save');
+                        await new Promise(resolve => setTimeout(resolve, 300));
+                        
+                        try {
+                            const ea = excalidrawPlugin.ea;
+                            ea.reset();
+                            const scene = await ea.getSceneFromFile(file);
+                            
+                            if(scene && scene.elements) {
+                                ea.copyViewElementsToEAforEditing(scene.elements);
+                                
+                                // Generate PNG entirely in RAM (Bypasses background saving delay)
+                                const blob = await ea.createPNG();
+                                const arrayBuffer = await blob.arrayBuffer();
+                                const base64 = obsidian.arrayBufferToBase64(arrayBuffer);
+                                
+                                parts.push({
+                                    inlineData: { mimeType: 'image/png', data: base64 }
+                                });
+                                continue; 
+                            }
+                        } catch (err) {
+                            console.error("Excalidraw Render Error:", err);
+                            new obsidian.Notice(`Warning: Failed to render Excalidraw image. Trying text fallback...`);
+                        }
                     }
 
-                    parts.push({
-                        inlineData: { mimeType: mimeType, data: base64 }
-                    });
+                    // --- BINARY MEDIA PROCESSING ---
+                    if (['png', 'jpg', 'jpeg', 'webp', 'heic', 'pdf', 'mp3', 'mp4', 'm4a', 'wav', 'webm'].includes(extension)) {
+                        new obsidian.Notice(`Processing media: ${file.name}...`);
+                        const binary = await this.app.vault.readBinary(file);
+                        const base64 = obsidian.arrayBufferToBase64(binary);
+                        
+                        let mimeType = 'application/octet-stream';
+                        if (['png', 'jpg', 'jpeg', 'webp', 'heic'].includes(extension)) {
+                            mimeType = extension === 'jpg' ? 'image/jpeg' : `image/${extension}`;
+                        } else if (extension === 'pdf') {
+                            mimeType = 'application/pdf';
+                        } else {
+                            mimeType = 'audio/' + extension;
+                            if (extension === 'm4a') mimeType = 'audio/x-m4a';
+                            else if (extension === 'mp4') mimeType = 'video/mp4';
+                        }
+
+                        parts.push({
+                            inlineData: { mimeType: mimeType, data: base64 }
+                        });
+                    } 
+                    // --- TEXT/NOTE TRANSCLUSION ---
+                    else if (['md', 'canvas', 'txt'].includes(extension)) {
+                        new obsidian.Notice(`Reading embedded text: ${file.name}...`);
+                        let embedText = await this.app.vault.read(file);
+                        
+                        // Strip standard YAML Frontmatter
+                        embedText = embedText.replace(/^---[\s\S]*?---\n/m, ''); 
+                        
+                        embeddedMarkdown += `\n\n--- Content from embedded file: ${file.name} ---\n${embedText.trim()}`;
+                    }
                 } else {
-                    // ERROR CATCH 2: File missing from vault
-                    new obsidian.Notice(`Warning: Could not find file '${filename}' in the vault.`);
+                    new obsidian.Notice(`Warning: Could not find file '${cleanLink}' in the vault.`);
                 }
             }
 
@@ -374,7 +423,7 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
                 promptText = `User Instructions: ${this.settings.defaultAction}\n\n`;
             }
             
-            promptText += "Source Material:\n" + cleanedText;
+            promptText += "Source Material:\n" + cleanedText + embeddedMarkdown;
 
             if (action === 'Insert') {
                 promptText += "\n\n(IMPORTANT: The user is inserting your response into their existing note. Do not rewrite or repeat the existing note text above. ONLY output the new content to be inserted.)";
@@ -391,7 +440,7 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
             const response = await obsidian.requestUrl({
                 url: `https://generativelanguage.googleapis.com/v1beta/models/${this.settings.model}:generateContent?key=${this.settings.apiKey}`,
                 method: 'POST',
-                throw: false, // <--- ADD THIS LINE HERE
+                throw: false, 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     systemInstruction: { parts: [{ text: this.settings.systemInstruction }] },
@@ -414,7 +463,6 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
                 
                 new obsidian.Notice(`Gemini Action completed successfully!`);
             } else {
-                // ERROR CATCH 3: Explicit API Rejections
                 this.revertLoadingState(editor, action, insertLoadingText, replaceLoadingText);
                 
                 if (response.status === 400) {
@@ -424,7 +472,6 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
                 } else if (response.status === 429) {
                     new obsidian.Notice('Error 429: Rate limit exceeded. You may be making requests too quickly on the Free Tier.');
                 } else {
-                    // Try to parse Google's exact error message if it's something else
                     let errorMsg = `API Error ${response.status}`;
                     if (response.json && response.json.error && response.json.error.message) {
                         errorMsg += `: ${response.json.error.message}`;
@@ -433,14 +480,12 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
                 }
             }
         } catch (error) {
-            // ERROR CATCH 4: Complete Network Failure (No Wi-Fi, DNS Block, etc.)
             console.error("Gemini API Error:", error);
             this.revertLoadingState(editor, action, insertLoadingText, replaceLoadingText);
             new obsidian.Notice('Network Error: Failed to connect to Google API. Are you connected to the internet?');
         }
     }
 
-    // Helper to gracefully revert the note if the API fails
     revertLoadingState(editor, action, insertLoadingText, replaceLoadingText) {
         const currentText = editor.getValue();
         if (action === 'Replace') {
