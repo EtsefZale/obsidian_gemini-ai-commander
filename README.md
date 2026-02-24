@@ -13,9 +13,24 @@ A simple, fast, and highly customizable AI assistant for your Obsidian vault, po
 - **💬 Chat:** Ask Gemini a quick question and insert the answer directly into your note.
 - **📝 Summarize (Replace or Insert):** Process the current note text and attached files to generate structured notes based on your customizable Default Action.
 - **🧠 Chat w/ File (Replace or Insert):** Provide custom instructions (e.g., "Translate this to Spanish" or "Explain this concept") to process the current note and its attachments.
-- **📎 Multimodal File Support:** Just drag and drop a file into your note! Automatically reads and processes **Audio** (mp3, m4a, mp4, wav, webm), **Images** (png, jpg, webp, heic), and **PDFs**.
+- **📎 Universal File Support:** Just drag and drop a file into your note! Automatically reads media, documents, embedded notes, and drawings (see supported formats below).
 - **⏳ Native Loading UI:** Clean `> [!info] ⏳ Gemini is thinking...` callouts let you know when the AI is processing.
 - **🛡️ Safe Fallbacks & Error Catching:** If the API fails, your rate limit is hit, or your internet drops, the plugin safely reverts your note so you never lose your original text.
+
+## 🗂️ Plugin & File Support
+
+Gemini AI Commander is built to understand your vault, no matter how you link or format your files. It natively processes Wiki-links (`![[File]]`), standard Markdown links (`![Image](file)`), aliases, and block references.
+
+**Natively Supported Formats:**
+- **📝 Note Transclusion:** Embed standard notes directly into your prompt (`.md`, `.txt`, `.canvas`).
+- **🖼️ Images:** `.png`, `.jpg`, `.jpeg`, `.webp`, `.heic`
+   - **NOTE**: This WILL NOT read `.svg` or similar vector-based image files. 
+- **🎧 Audio:** `.mp3`, `.m4a`, `.mp4`, `.wav`, `.webm`
+- **📄 Documents:** `.pdf`
+
+**🎨 Excalidraw Integration (v1.1.0+):**
+Gemini AI Commander now features integration with the official **Excalidraw** plugin! When you embed a `.excalidraw` or `.excalidraw.md` file, the plugin bypasses your physical hard drive and uses Excalidraw's developer API to render a high-res image directly in your device's active RAM. 
+- **NOTE**: Excalidraw Integration ONLY READS FILES ending in `.excalidraw` or `.excalidraw.md`; this WILL NOT read `.excalidraw.svg` files, and it will use standard image processing for `.excalidraw.png` files, so MAKE SURE YOUR FILES ARE UPDATED!
 
 ## 🚀 Getting Started
 
