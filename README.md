@@ -13,8 +13,9 @@ A simple, fast, and highly customizable AI assistant for your Obsidian vault, po
 - **💬 Chat:** Ask Gemini a quick question and insert the answer directly into your note.
 - **📝 Summarize (Replace or Insert):** Process the current note text and attached files to generate structured notes based on your customizable Default Action.
 - **🧠 Chat w/ File (Replace or Insert):** Provide custom instructions (e.g., "Translate this to Spanish" or "Explain this concept") to process the current note and its attachments.
+- **⚡ Real-Time Streaming (v1.2.0+):** Watch the AI type out its response right before your eyes! No more waiting for massive blocks of text to load all at once.
+- **🛑 Cancel Kill-Switch (v1.2.0+):** Changed your mind or gave the wrong prompt? Instantly stop the AI's generation mid-sentence using the command palette or the sidebar ribbon button.
 - **📎 Universal File Support:** Just drag and drop a file into your note! Automatically reads media, documents, embedded notes, and drawings (see supported formats below).
-- **⏳ Native Loading UI:** Clean `> [!info] ⏳ Gemini is thinking...` callouts let you know when the AI is processing.
 - **🛡️ Safe Fallbacks & Error Catching:** If the API fails, your rate limit is hit, or your internet drops, the plugin safely reverts your note so you never lose your original text.
 
 ## 🗂️ Plugin & File Support

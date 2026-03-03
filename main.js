@@ -174,6 +174,7 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
     async onload() {
         this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
         this.addSettingTab(new GeminiSettingTab(this.app, this));
+        this.abortController = null; // Used to pause/cancel processing
 
         // --- COMMAND PALETTE ---
         this.addCommand({
@@ -215,6 +216,19 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
                 new InstructionModal(this.app, false, this.settings.defaultAction, (instruction) => {
                     this.processNotes(editor, view, 'Insert', instruction);
                 }).open();
+            }
+        });
+        
+        // New Command: Cancel Processing
+        this.addCommand({
+            id: 'gemini-cancel',
+            name: 'Cancel Processing',
+            callback: () => {
+                if (this.abortController) {
+                    this.abortController.abort();
+                } else {
+                    new obsidian.Notice("No active Gemini process to cancel.");
+                }
             }
         });
 
@@ -269,6 +283,19 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
                         new InstructionModal(this.app, false, this.settings.defaultAction, (instruction) => {
                             this.processNotes(editor, view, 'Insert', instruction);
                         }).open();
+                    })
+            );
+            
+            // New Ribbon Menu Item: Cancel Processing
+            menu.addItem((item) =>
+                item.setTitle('Cancel Processing')
+                    .setIcon('x-circle')
+                    .onClick(() => {
+                        if (this.abortController) {
+                            this.abortController.abort();
+                        } else {
+                            new obsidian.Notice("No active Gemini process to cancel.");
+                        }
                     })
             );
 
@@ -435,54 +462,129 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
             parts.push({ text: promptText });
         }
 
-        // --- API CALL ---
+        // --- API CALL (STREAMING OVERRIDE) ---
+        this.abortController = new AbortController();
+
         try {
-            const response = await obsidian.requestUrl({
-                url: `https://generativelanguage.googleapis.com/v1beta/models/${this.settings.model}:generateContent?key=${this.settings.apiKey}`,
+            // We use standard fetch instead of obsidian.requestUrl so we can process the Server-Sent Events stream
+            const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.settings.model}:streamGenerateContent?alt=sse&key=${this.settings.apiKey}`, {
                 method: 'POST',
-                throw: false, 
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     systemInstruction: { parts: [{ text: this.settings.systemInstruction }] },
                     contents: [{ parts: parts }],
                     generationConfig: { temperature: this.settings.temperature }
-                })
+                }),
+                signal: this.abortController.signal
             });
 
-            if (response.status === 200) {
-                const result = response.json.candidates[0].content.parts[0].text;
-                const currentText = editor.getValue();
-                
-                if (action === 'Replace') {
-                    const finalNote = hasFiles ? embedsToKeep + "\n" + result : result;
-                    editor.setValue(finalNote);
-                } else if (action === 'Insert' || action === 'Chat') {
-                    const newText = currentText.replace(insertLoadingText, "\n\n" + result + "\n\n");
-                    editor.setValue(newText);
-                }
-                
-                new obsidian.Notice(`Gemini Action completed successfully!`);
-            } else {
-                this.revertLoadingState(editor, action, insertLoadingText, replaceLoadingText);
-                
-                if (response.status === 400) {
-                    new obsidian.Notice('Error 400: Invalid request. Check if your file type is supported.');
-                } else if (response.status === 401 || response.status === 403) {
-                    new obsidian.Notice('Error 401/403: Invalid API Key. Please double-check your settings.');
-                } else if (response.status === 429) {
-                    new obsidian.Notice('Error 429: Rate limit exceeded. You may be making requests too quickly on the Free Tier.');
-                } else {
-                    let errorMsg = `API Error ${response.status}`;
-                    if (response.json && response.json.error && response.json.error.message) {
-                        errorMsg += `: ${response.json.error.message}`;
+            if (!response.ok) {
+                const errText = await response.text();
+                let errorMsg = `API Error ${response.status}`;
+                try {
+                    const errJson = JSON.parse(errText);
+                    if (errJson.error && errJson.error.message) {
+                        errorMsg += `: ${errJson.error.message}`;
                     }
-                    new obsidian.Notice(errorMsg);
+                } catch (e) {}
+                this.revertLoadingState(editor, action, insertLoadingText, replaceLoadingText);
+                new obsidian.Notice(errorMsg);
+                this.abortController = null;
+                return;
+            }
+
+            // --- PREPARE EDITOR FOR REAL-TIME STREAMING ---
+            let streamCursor = null;
+
+            if (action === 'Replace') {
+                // Wipe the canvas clean (preserving file links if they exist)
+                editor.setValue(hasFiles ? embedsToKeep + "\n\n" : "");
+                streamCursor = { line: editor.lastLine(), ch: editor.getLine(editor.lastLine()).length };
+            } else {
+                // For insert/chat, gracefully locate and remove the loading text we just dropped in
+                let text = editor.getValue();
+                let idx = text.indexOf(insertLoadingText);
+                
+                if (idx !== -1) {
+                    let linesBefore = text.substring(0, idx).split('\n');
+                    let startLine = linesBefore.length - 1;
+                    let startCh = linesBefore[linesBefore.length - 1].length;
+
+                    let linesLoading = insertLoadingText.split('\n');
+                    let endLine = startLine + linesLoading.length - 1;
+                    let endCh = (linesLoading.length === 1 ? startCh : 0) + linesLoading[linesLoading.length - 1].length;
+
+                    editor.replaceRange("", {line: startLine, ch: startCh}, {line: endLine, ch: endCh});
+                    streamCursor = {line: startLine, ch: startCh};
+                    
+                    // Drop down two lines so the streaming output has breathing room
+                    editor.replaceRange("\n\n", streamCursor);
+                    streamCursor.line += 2;
+                    streamCursor.ch = 0;
+                } else {
+                    // Fallback in case they deleted the loading text themselves
+                    streamCursor = editor.getCursor();
                 }
             }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder("utf-8");
+            let done = false;
+            let buffer = "";
+
+            while (!done) {
+                const { value, done: readerDone } = await reader.read();
+                done = readerDone;
+                
+                if (value) {
+                    buffer += decoder.decode(value, { stream: true });
+                    let lines = buffer.split('\n');
+                    buffer = lines.pop(); // Hold onto the last chunk in case it got cut off mid-JSON string
+                    
+                    for (let line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const dataStr = line.slice(6);
+                            if (dataStr.trim() === '[DONE]') continue;
+                            
+                            try {
+                                const data = JSON.parse(dataStr);
+                                if (data.candidates && data.candidates[0].content && data.candidates[0].content.parts) {
+                                    const chunkText = data.candidates[0].content.parts[0].text;
+                                    
+                                    if (chunkText) {
+                                        // Type the text into Obsidian
+                                        editor.replaceRange(chunkText, streamCursor);
+                                        
+                                        // Dynamically calculate where the cursor needs to move next
+                                        let chunkLines = chunkText.split('\n');
+                                        if (chunkLines.length === 1) {
+                                            streamCursor.ch += chunkLines[0].length;
+                                        } else {
+                                            streamCursor.line += chunkLines.length - 1;
+                                            streamCursor.ch = chunkLines[chunkLines.length - 1].length;
+                                        }
+                                    }
+                                }
+                            } catch(err) {
+                                // Silently ignore broken JSON chunks; they fix themselves on the next loop iteration
+                            }
+                        }
+                    }
+                }
+            }
+            
+            new obsidian.Notice(`Gemini Action completed successfully!`);
+            
         } catch (error) {
-            console.error("Gemini API Error:", error);
-            this.revertLoadingState(editor, action, insertLoadingText, replaceLoadingText);
-            new obsidian.Notice('Network Error: Failed to connect to Google API. Are you connected to the internet?');
+            if (error.name === 'AbortError') {
+                new obsidian.Notice("Gemini processing was successfully cancelled.");
+            } else {
+                console.error("Gemini API Error:", error);
+                this.revertLoadingState(editor, action, insertLoadingText, replaceLoadingText);
+                new obsidian.Notice('Network Error: Failed to connect to Google API. Are you connected to the internet?');
+            }
+        } finally {
+            this.abortController = null;
         }
     }
 
