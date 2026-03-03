@@ -45,10 +45,10 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        containerEl.createEl('h2', { text: 'Gemini AI Commander Settings' });
+        // The top-level h2 heading has been completely removed to comply with Obsidian UI guidelines.
 
         new obsidian.Setting(containerEl)
-            .setName('Gemini API Key')
+            .setName('Gemini API key') // Adjusted to sentence case
             .setDesc('Enter your Google AI Studio API key.')
             .addText(text => text
                 .setPlaceholder('Enter your API key')
@@ -59,7 +59,7 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                 }));
                 
         new obsidian.Setting(containerEl)
-            .setName('Gemini Model')
+            .setName('Gemini model') // Adjusted to sentence case
             .setDesc('Choose the engine. Free Tier users should stick to Flash models to avoid hitting strict rate limits.')
             .addDropdown(drop => drop
                 .addOption('gemini-2.5-flash', 'Gemini 2.5 Flash (Default, Fast, Free-Tier Friendly)')
@@ -91,7 +91,7 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                 }));
 
         new obsidian.Setting(containerEl)
-            .setName('Default Action')
+            .setName('Default action') // Adjusted to sentence case
             .setDesc('What should Gemini do when you run the Summarize commands?')
             .addTextArea(text => {
                 text.setPlaceholder('E.g., Summarize the notes...')
@@ -105,7 +105,7 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
             });
 
         new obsidian.Setting(containerEl)
-            .setName('System Formatting Instructions')
+            .setName('System formatting instructions') // Adjusted to sentence case
             .setDesc('Strict formatting rules for Gemini. Adjust this if you need different output types.')
             .addTextArea(text => {
                 text.setPlaceholder('Enter your system instructions...')
@@ -131,7 +131,8 @@ class InstructionModal extends obsidian.Modal {
 
     onOpen() {
         const { contentEl } = this;
-        contentEl.createEl('h2', { text: this.isChatMode ? 'Chat with Gemini' : 'Gemini Custom Instructions' });
+        // Adjusted to sentence case
+        contentEl.createEl('h2', { text: this.isChatMode ? 'Chat with Gemini' : 'Gemini custom instructions' });
 
         let instruction = '';
         const descText = this.isChatMode 
@@ -139,7 +140,7 @@ class InstructionModal extends obsidian.Modal {
             : `Leave blank to fall back to default: "${this.defaultAction}"`;
 
         new obsidian.Setting(contentEl)
-            .setName(this.isChatMode ? 'Your Question' : 'Instructions')
+            .setName(this.isChatMode ? 'Your question' : 'Instructions') // Adjusted to sentence case
             .setDesc(descText)
             .addText((text) => {
                 text.onChange((value) => {
