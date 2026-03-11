@@ -65,7 +65,7 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                 .addOption('gemini-2.5-flash', 'Gemini 2.5 Flash (Default, Fast, Free-Tier Friendly)')
                 .addOption('gemini-2.5-pro', 'Gemini 2.5 Pro (Complex Reasoning, Paid Tier Required)')
                 .addOption('gemini-3-flash-preview', 'Gemini 3 Flash (Latest Gen, Fast)')
-                .addOption('gemini-3-pro-preview', 'Gemini 3 Pro (Latest Gen, Paid Tier Required)')
+                .addOption('gemini-3.1-pro-preview', 'Gemini 3.1 Pro (Latest Gen, Paid Tier Required)')
                 .setValue(this.plugin.settings.model)
                 .onChange(async (value) => {
                     this.plugin.settings.model = value;
