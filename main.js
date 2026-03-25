@@ -45,10 +45,42 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
         const { containerEl } = this;
         containerEl.empty();
 
-        // The top-level h2 heading has been completely removed to comply with Obsidian UI guidelines.
+        // --- 0. HEADER & LINKS ---
+        const headerDiv = containerEl.createDiv();
+        headerDiv.style.textAlign = 'center';
+        headerDiv.style.marginBottom = '25px';
+        headerDiv.style.padding = '15px';
+        headerDiv.style.backgroundColor = 'var(--background-secondary)';
+        headerDiv.style.borderRadius = '8px';
+        headerDiv.style.border = '1px solid var(--background-modifier-border)';
 
-        new obsidian.Setting(containerEl)
-            .setName('Gemini API key') // Adjusted to sentence case
+        headerDiv.createEl('h3', { text: 'Gemini AI Commander' }).style.marginTop = '0';
+        headerDiv.createEl('p', { text: 'Created by Etsef Zale (ΣПᗪΣЯ)' }).style.margin = '0 0 10px 0';
+        
+        headerDiv.createEl('a', { text: '🌐 ender.website', href: 'https://ender.website' });
+        headerDiv.createEl('span', { text: '  •  ' });
+        headerDiv.createEl('a', { text: '🐙 GitHub Repository', href: 'https://github.com/EtsefZale/obsidian_gemini-ai-commander' });
+
+        // Helper function to style the collapsible summaries like Excalidraw headers natively
+        const styleSummary = (summaryEl, text) => {
+            summaryEl.style.cursor = 'pointer';
+            summaryEl.style.fontWeight = '600';
+            summaryEl.style.fontSize = 'var(--h3-size)'; // Native Obsidian header sizing
+            summaryEl.style.color = 'var(--text-accent)'; // Native Obsidian theme color
+            summaryEl.style.borderBottom = '1px solid var(--background-modifier-border)';
+            summaryEl.style.paddingBottom = '8px';
+            summaryEl.style.marginBottom = '10px';
+            summaryEl.textContent = text;
+        };
+
+        // --- 1. GENERAL SETTINGS (Collapsible Dropdown) ---
+        const generalDetails = containerEl.createEl('details', { attr: { open: '' } }); 
+        generalDetails.style.marginBottom = '20px';
+        const generalSummary = generalDetails.createEl('summary');
+        styleSummary(generalSummary, 'General settings');
+
+        new obsidian.Setting(generalDetails)
+            .setName('Gemini API key') 
             .setDesc('Enter your Google AI Studio API key.')
             .addText(text => text
                 .setPlaceholder('Enter your API key')
@@ -58,8 +90,8 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
                 
-        new obsidian.Setting(containerEl)
-            .setName('Gemini model') // Adjusted to sentence case
+        new obsidian.Setting(generalDetails)
+            .setName('Gemini model') 
             .setDesc('Choose the engine. Free Tier users should stick to Flash models to avoid hitting strict rate limits.')
             .addDropdown(drop => drop
                 .addOption('gemini-2.5-flash', 'Gemini 2.5 Flash (Default, Fast, Free-Tier Friendly)')
@@ -72,11 +104,10 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
 
-        // --- NEW DISCLAIMER BLOCK ---
-        new obsidian.Setting(containerEl)
+        new obsidian.Setting(generalDetails)
             .setDesc('⚠️ NOTE: Google heavily restricts the "Pro" models on the Free Tier. If you get an "Error 429: Rate limit exceeded" immediately when using a Pro model, you must either switch back to a Flash model or upgrade your API key to a Pay-As-You-Go billing account in Google AI Studio.');
 
-        new obsidian.Setting(containerEl)
+        new obsidian.Setting(generalDetails)
             .setName('Temperature')
             .setDesc('Controls creativity. 0.0 is strictly factual and rigid. 1.0 is highly creative. (Recommended for notes: 0.1 - 0.3)')
             .addText(text => text
@@ -88,10 +119,25 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                         this.plugin.settings.temperature = parsed;
                         await this.plugin.saveSettings();
                     }
+                }))
+            .addExtraButton(btn => btn
+                .setIcon('reset')
+                .setTooltip('Reset to default temperature')
+                .onClick(async () => {
+                    this.plugin.settings.temperature = DEFAULT_SETTINGS.temperature;
+                    await this.plugin.saveSettings();
+                    this.display(); 
+                    new obsidian.Notice('Temperature reset to default.');
                 }));
 
-        new obsidian.Setting(containerEl)
-            .setName('Default action') // Adjusted to sentence case
+        // --- 2. PROMPTS & INSTRUCTIONS (Collapsible Dropdown) ---
+        const promptDetails = containerEl.createEl('details', { attr: { open: '' } }); 
+        promptDetails.style.marginBottom = '20px';
+        const promptSummary = promptDetails.createEl('summary');
+        styleSummary(promptSummary, 'Prompts and instructions');
+
+        const defaultActionSetting = new obsidian.Setting(promptDetails)
+            .setName('Default action') 
             .setDesc('What should Gemini do when you run the Summarize commands?')
             .addTextArea(text => {
                 text.setPlaceholder('E.g., Summarize the notes...')
@@ -100,12 +146,26 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                         this.plugin.settings.defaultAction = value;
                         await this.plugin.saveSettings();
                     });
-                text.inputEl.rows = 3;
-                text.inputEl.cols = 50;
-            });
+                text.inputEl.rows = 4;
+                text.inputEl.style.width = '100%';
+                text.inputEl.style.resize = 'vertical'; 
+            })
+            .addExtraButton(btn => btn
+                .setIcon('reset')
+                .setTooltip('Reset to default action')
+                .onClick(async () => {
+                    this.plugin.settings.defaultAction = DEFAULT_SETTINGS.defaultAction;
+                    await this.plugin.saveSettings();
+                    this.display(); 
+                    new obsidian.Notice('Default action reset.');
+                }));
+        
+        defaultActionSetting.settingEl.style.flexDirection = 'column';
+        defaultActionSetting.settingEl.style.alignItems = 'stretch';
+        defaultActionSetting.controlEl.style.marginTop = '10px';
 
-        new obsidian.Setting(containerEl)
-            .setName('System formatting instructions') // Adjusted to sentence case
+        const sysInstructionSetting = new obsidian.Setting(promptDetails)
+            .setName('System formatting instructions') 
             .setDesc('Strict formatting rules for Gemini. Adjust this if you need different output types.')
             .addTextArea(text => {
                 text.setPlaceholder('Enter your system instructions...')
@@ -115,8 +175,47 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                         await this.plugin.saveSettings();
                     });
                 text.inputEl.rows = 8;
-                text.inputEl.cols = 50;
-            });
+                text.inputEl.style.width = '100%';
+                text.inputEl.style.resize = 'vertical'; 
+            })
+            .addExtraButton(btn => btn
+                .setIcon('reset')
+                .setTooltip('Reset to default instructions')
+                .onClick(async () => {
+                    this.plugin.settings.systemInstruction = DEFAULT_SETTINGS.systemInstruction;
+                    await this.plugin.saveSettings();
+                    this.display(); 
+                    new obsidian.Notice('System instructions reset.');
+                }));
+
+        sysInstructionSetting.settingEl.style.flexDirection = 'column';
+        sysInstructionSetting.settingEl.style.alignItems = 'stretch';
+        sysInstructionSetting.controlEl.style.marginTop = '10px';
+
+        // --- 3. ADVANCED (Collapsible Dropdown) ---
+        const advDetails = containerEl.createEl('details'); 
+        advDetails.style.marginBottom = '20px';
+        const advSummary = advDetails.createEl('summary');
+        styleSummary(advSummary, 'Advanced');
+
+        new obsidian.Setting(advDetails)
+            .setName('Reset all settings')
+            .setDesc('Restore every setting (including your API key) to its default state.')
+            .addButton(btn => btn
+                .setButtonText('Reset All')
+                .setWarning() 
+                .onClick(() => {
+                    new ConfirmModal(
+                        this.app,
+                        "WARNING: This will reset the ENTIRE PLUGIN. Are you 100% sure you want to do this? (You'll need to re-enter your API key and re-select your preferred model as well.)",
+                        async () => {
+                            this.plugin.settings = Object.assign({}, DEFAULT_SETTINGS);
+                            await this.plugin.saveSettings();
+                            this.display();
+                            new obsidian.Notice('All settings have been completely reset.');
+                        }
+                    ).open();
+                }));
     }
 }
 
@@ -131,28 +230,35 @@ class InstructionModal extends obsidian.Modal {
 
     onOpen() {
         const { contentEl } = this;
-        // Adjusted to sentence case
         contentEl.createEl('h2', { text: this.isChatMode ? 'Chat with Gemini' : 'Gemini custom instructions' });
 
         let instruction = '';
         const descText = this.isChatMode 
-            ? 'Ask Gemini a question (this ignores the current file contents).' 
-            : `Leave blank to fall back to default: "${this.defaultAction}"`;
+            ? 'Ask Gemini a question (this ignores the current file contents). Shift + Enter for a new line.' 
+            : `Leave blank to fall back to default: "${this.defaultAction}"\nShift + Enter for a new line.`;
 
-        new obsidian.Setting(contentEl)
-            .setName(this.isChatMode ? 'Your question' : 'Instructions') // Adjusted to sentence case
+        const instructionSetting = new obsidian.Setting(contentEl)
+            .setName(this.isChatMode ? 'Your question' : 'Instructions') 
             .setDesc(descText)
-            .addText((text) => {
+            .addTextArea((text) => {
                 text.onChange((value) => {
                     instruction = value;
                 });
-                text.inputEl.addEventListener('keypress', (e) => {
-                    if (e.key === 'Enter') {
+                text.inputEl.rows = 5;
+                text.inputEl.style.width = '100%';
+                text.inputEl.style.resize = 'vertical'; 
+                text.inputEl.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
                         this.close();
                         this.onSubmit(instruction);
                     }
                 });
             });
+
+        instructionSetting.settingEl.style.flexDirection = 'column';
+        instructionSetting.settingEl.style.alignItems = 'stretch';
+        instructionSetting.controlEl.style.marginTop = '10px';
 
         new obsidian.Setting(contentEl)
             .addButton((btn) => btn
@@ -161,6 +267,40 @@ class InstructionModal extends obsidian.Modal {
                 .onClick(() => {
                     this.close();
                     this.onSubmit(instruction);
+                }));
+    }
+
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+}
+
+// 3.5 Declare the confirmation modal for complete resets
+class ConfirmModal extends obsidian.Modal {
+    constructor(app, message, onConfirm) {
+        super(app);
+        this.message = message;
+        this.onConfirm = onConfirm;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.createEl('h2', { text: '⚠️ Warning' });
+        contentEl.createEl('p', { text: this.message });
+
+        new obsidian.Setting(contentEl)
+            .addButton(btn => btn
+                .setButtonText('Cancel')
+                .onClick(() => {
+                    this.close();
+                }))
+            .addButton(btn => btn
+                .setButtonText('Yes, Reset Everything')
+                .setWarning()
+                .onClick(() => {
+                    this.close();
+                    this.onConfirm();
                 }));
     }
 
