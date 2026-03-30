@@ -54,7 +54,25 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
         headerDiv.style.borderRadius = '8px';
         headerDiv.style.border = '1px solid var(--background-modifier-border)';
 
-        headerDiv.createEl('h3', { text: 'Gemini AI Commander' }).style.marginTop = '0';
+        // Dynamically grab the current version from your manifest.json!
+        const currentVersion = this.plugin.manifest.version; 
+        const previousVersion = "1.3.0"; // Update this string on your next release
+
+        const titleEl = headerDiv.createEl('h3');
+        titleEl.style.marginTop = '0';
+        titleEl.style.marginBottom = '5px';
+        titleEl.appendText('Gemini AI Commander ');
+        
+        // Append the clickable version link right next to the title
+        const versionLink = titleEl.createEl('a', { 
+            text: `v${currentVersion}`, 
+            // Ensures the proper GitHub compare URL format
+            href: `https://github.com/EtsefZale/obsidian_gemini-ai-commander/compare/${previousVersion}...${currentVersion}` 
+        });
+        versionLink.style.fontSize = '0.75em';
+        versionLink.style.fontWeight = 'normal';
+        versionLink.style.color = 'var(--text-muted)';
+
         headerDiv.createEl('p', { text: 'Created by Etsef Zale (ΣПᗪΣЯ)' }).style.margin = '0 0 10px 0';
         
         headerDiv.createEl('a', { text: '🌐 ender.website', href: 'https://ender.website' });
@@ -606,6 +624,17 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
         // --- API CALL (STREAMING OVERRIDE) ---
         this.abortController = new AbortController();
 
+        // --- NEW: SCROLL INTERRUPTION TRACKING ---
+        let userInterruptedScroll = false;
+        const interruptScroll = () => { userInterruptedScroll = true; };
+        const viewEl = view.contentEl;
+
+        // Listen for any user action that indicates they want to look elsewhere
+        viewEl.addEventListener('wheel', interruptScroll, { passive: true });
+        viewEl.addEventListener('touchmove', interruptScroll, { passive: true });
+        viewEl.addEventListener('mousedown', interruptScroll, { passive: true });
+        viewEl.addEventListener('keydown', interruptScroll, { passive: true });
+
         try {
             // We use standard fetch instead of obsidian.requestUrl so we can process the Server-Sent Events stream
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.settings.model}:streamGenerateContent?alt=sse&key=${this.settings.apiKey}`, {
@@ -704,6 +733,12 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
                                             streamCursor.line += chunkLines.length - 1;
                                             streamCursor.ch = chunkLines[chunkLines.length - 1].length;
                                         }
+
+                                        // --- AUTO-SCROLL EXECUTION ---
+                                        if (!userInterruptedScroll) {
+                                            editor.setCursor(streamCursor);
+                                            editor.scrollIntoView({ from: streamCursor, to: streamCursor });
+                                        }
                                     }
                                 }
                             } catch(err) {
@@ -726,6 +761,12 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
             }
         } finally {
             this.abortController = null;
+            
+            // --- CLEANUP SCROLL LISTENERS ---
+            viewEl.removeEventListener('wheel', interruptScroll);
+            viewEl.removeEventListener('touchmove', interruptScroll);
+            viewEl.removeEventListener('mousedown', interruptScroll);
+            viewEl.removeEventListener('keydown', interruptScroll);
         }
     }
 
