@@ -56,7 +56,7 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
 
         // Dynamically grab the current version from your manifest.json!
         const currentVersion = this.plugin.manifest.version; 
-        const previousVersion = "1.3.0"; // Update this string on your next release
+        const previousVersion = "1.3.1"; // Update this string on your next release
 
         const titleEl = headerDiv.createEl('h3');
         titleEl.style.marginTop = '0';
