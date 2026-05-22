@@ -1,4 +1,21 @@
 const obsidian = require('obsidian');
+const versions = require('./versions.json');
+
+function compareVersions(left, right) {
+    const leftParts = left.split('.').map(Number);
+    const rightParts = right.split('.').map(Number);
+
+    for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index++) {
+        const leftPart = leftParts[index] ?? 0;
+        const rightPart = rightParts[index] ?? 0;
+
+        if (leftPart !== rightPart) {
+            return leftPart - rightPart;
+        }
+    }
+
+    return 0;
+}
 
 // 1. Establish the default settings and Welcome Message
 const DEFAULT_SETTINGS = {
@@ -56,7 +73,9 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
 
         // Dynamically grab the current version from your manifest.json!
         const currentVersion = this.plugin.manifest.version; 
-        const previousVersion = "1.3.1"; // Update this string on your next release
+        const versionHistory = Object.keys(versions).sort(compareVersions);
+        const currentVersionIndex = versionHistory.indexOf(currentVersion);
+        const previousVersion = currentVersionIndex > 0 ? versionHistory[currentVersionIndex - 1] : currentVersion;
 
         const titleEl = headerDiv.createEl('h3');
         titleEl.style.marginTop = '0';
