@@ -1,21 +1,4 @@
 const obsidian = require('obsidian');
-const versions = require('./versions.json');
-
-function compareVersions(left, right) {
-    const leftParts = left.split('.').map(Number);
-    const rightParts = right.split('.').map(Number);
-
-    for (let index = 0; index < Math.max(leftParts.length, rightParts.length); index++) {
-        const leftPart = leftParts[index] ?? 0;
-        const rightPart = rightParts[index] ?? 0;
-
-        if (leftPart !== rightPart) {
-            return leftPart - rightPart;
-        }
-    }
-
-    return 0;
-}
 
 // 1. Establish the default settings and Welcome Message
 const DEFAULT_SETTINGS = {
@@ -73,9 +56,6 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
 
         // Dynamically grab the current version from your manifest.json!
         const currentVersion = this.plugin.manifest.version; 
-        const versionHistory = Object.keys(versions).sort(compareVersions);
-        const currentVersionIndex = versionHistory.indexOf(currentVersion);
-        const previousVersion = currentVersionIndex > 0 ? versionHistory[currentVersionIndex - 1] : currentVersion;
 
         const titleEl = headerDiv.createEl('h3');
         titleEl.style.marginTop = '0';
@@ -84,9 +64,9 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
         
         // Append the clickable version link right next to the title
         const versionLink = titleEl.createEl('a', { 
-            text: `${currentVersion}`, 
-            // Ensures the proper GitHub compare URL format
-            href: `https://github.com/EtsefZale/obsidian_gemini-ai-commander/compare/${previousVersion}...${currentVersion}` 
+            text: `v${currentVersion}`, 
+            // Link directly to the GitHub release tag for the current version!
+            href: `https://github.com/EtsefZale/obsidian_gemini-ai-commander/releases/tag/${currentVersion}` 
         });
         versionLink.style.fontSize = '0.75em';
         versionLink.style.fontWeight = 'normal';
