@@ -64,7 +64,7 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
         
         // Append the clickable version link right next to the title
         const versionLink = titleEl.createEl('a', { 
-            text: `v${currentVersion}`, 
+            text: `${currentVersion}`, 
             // Link directly to the GitHub release tag for the current version!
             href: `https://github.com/EtsefZale/obsidian_gemini-ai-commander/releases/tag/${currentVersion}` 
         });
@@ -107,19 +107,142 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
                     await this.plugin.saveSettings();
                 }));
                 
-        new obsidian.Setting(generalDetails)
+        const modelSetting = new obsidian.Setting(generalDetails)
             .setName('Gemini model') 
-            .setDesc('Choose the engine. Free Tier users should stick to Flash models to avoid hitting strict rate limits.')
-            .addDropdown(drop => drop
-                .addOption('gemini-2.5-flash', 'Gemini 2.5 Flash (Default, Fast, Free-Tier Friendly)')
-                .addOption('gemini-2.5-pro', 'Gemini 2.5 Pro (Complex Reasoning, Paid Tier Required)')
-                .addOption('gemini-3-flash-preview', 'Gemini 3 Flash (Latest Gen, Fast)')
-                .addOption('gemini-3.1-pro-preview', 'Gemini 3.1 Pro (Latest Gen, Paid Tier Required)')
-                .setValue(this.plugin.settings.model)
-                .onChange(async (value) => {
-                    this.plugin.settings.model = value;
-                    await this.plugin.saveSettings();
-                }));
+            .setDesc('Choose the engine. Free Tier users should stick to Flash models. (Don\'t see a model you expect? Make sure your API key has access to it, and then click the refresh button.)');
+
+        modelSetting.addDropdown(drop => {
+            // Start with a placeholder or the currently saved model so the UI isn't completely blank
+            if (!this.plugin.settings.apiKey) {
+                drop.addOption(this.plugin.settings.model, 'Enter API Key to load models...');
+            } else {
+                drop.addOption(this.plugin.settings.model, this.plugin.settings.model + ' (Loading...)');
+            }
+            drop.setValue(this.plugin.settings.model);
+
+            drop.onChange(async (value) => {
+                this.plugin.settings.model = value;
+                await this.plugin.saveSettings();
+            });
+
+            // Dynamically fetch LIVE models from Google's servers
+            if (this.plugin.settings.apiKey) {
+                fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${this.plugin.settings.apiKey}`)
+                    .then(async (res) => {
+                        if (!res.ok) {
+                            const errText = await res.text();
+                            throw new Error(`HTTP ${res.status}: ${errText}`);
+                        }
+                        return res.json();
+                    })
+                    .then(data => {
+                        if (data && data.models) {
+                            // Filter for valid text-generation models and explicitly EXCLUDE experimental clutter
+                            // Filter for valid text-generation models and remove experimental/duplicate clutter
+                            const validModels = [];
+                            const seenIds = new Set();
+
+                            data.models.forEach(m => {
+                                // 1. Must support content generation
+                                if (!m.supportedGenerationMethods.includes('generateContent')) return;
+
+                                // 2. Identify the clean ID (e.g., 'gemini-3.5-flash')
+                                const modelId = m.name.replace('models/', '');
+                                const nameLower = (m.displayName || modelId).toLowerCase();
+
+                                // 3. Exclude experimental/specialized models
+                                const excludeKeywords = ['nano', 'tts', 'robotics', 'computer use', 'custom tools', 'experimental'];
+                                const isExcluded = excludeKeywords.some(keyword => nameLower.includes(keyword));
+                                
+                                // 4. Ensure it's a core Gemini model
+                                const isGemini = nameLower.includes('gemini');
+
+                                if (!isExcluded && isGemini && !seenIds.has(modelId)) {
+                                    validModels.push(m);
+                                    seenIds.add(modelId);
+                                }
+                            });
+
+                            if (validModels.length > 0) {
+                                drop.selectEl.empty();
+                                let hasCurrentModel = false;
+
+                                // --- SORT ALPHABETICALLY ---
+                                validModels.sort((a, b) => {
+                                    const nameA = (a.displayName || a.name).toLowerCase();
+                                    const nameB = (b.displayName || b.name).toLowerCase();
+                                    return nameA.localeCompare(nameB);
+                                });
+
+                                validModels.forEach(m => {
+                                    const modelId = m.name.replace('models/', '');
+                                    const displayName = m.displayName || modelId;
+                                    drop.addOption(modelId, displayName);
+                                    if (modelId === this.plugin.settings.model) hasCurrentModel = true;
+                                });
+
+                                // Ensure current setting is still selected even if it was deprecated
+                                if (!hasCurrentModel && this.plugin.settings.model) {
+                                    drop.addOption(this.plugin.settings.model, this.plugin.settings.model + ' (Custom/Legacy)');
+                                }
+                                drop.setValue(this.plugin.settings.model);
+
+                                // --- SUCCESS NOTIFICATION ---
+                                if (this.plugin._showRefreshNotice) {
+                                    new obsidian.Notice('Model list updated successfully!');
+                                    this.plugin._showRefreshNotice = false;
+                                }
+                            } else {
+                                throw new Error("No compatible text generation models found.");
+                            }
+                        } else {
+                            throw new Error("Invalid data structure returned from Google.");
+                        }
+                    })
+                    .catch(err => {
+                        console.error("Gemini AI Commander Model Fetch Error:", err);
+                        
+                        // Revert the dropdown to a failed state so it doesn't say "Loading..." forever
+                        drop.selectEl.empty();
+                        drop.addOption(this.plugin.settings.model, this.plugin.settings.model + ' (Fetch Failed)');
+                        drop.setValue(this.plugin.settings.model);
+                        
+                        // Parse JSON error if possible to make it readable
+                        let readableError = err.message;
+                        try {
+                            const errorMatch = err.message.match(/HTTP \d+: (.*)/);
+                            if (errorMatch) {
+                                const parsed = JSON.parse(errorMatch[1]);
+                                if (parsed.error && parsed.error.message) {
+                                    readableError = parsed.error.message;
+                                }
+                            }
+                        } catch (e) {}
+
+                        // Force the error to the screen so you can see exactly why it failed
+                        new obsidian.Notice(`Failed to fetch live models:\n${readableError}`, 10000);
+                        
+                        // Reset the flag just in case it fails
+                        this.plugin._showRefreshNotice = false;
+                    });
+            }
+        });
+
+        // Add a manual refresh button
+        modelSetting.addExtraButton(btn => btn
+            .setIcon('refresh-cw')
+            .setTooltip('Refresh live model list from Google')
+            .onClick(() => {
+                if (!this.plugin.settings.apiKey) {
+                    new obsidian.Notice('Please enter your API key first to fetch live models.');
+                } else {
+                    new obsidian.Notice('Fetching latest Gemini models...');
+                    // Set a temporary flag so the fetch knows to throw a success notification when it finishes!
+                    this.plugin._showRefreshNotice = true; 
+                    this.display(); // Re-renders the tab, triggering the fetch again
+                }
+            })
+        );
 
         new obsidian.Setting(generalDetails)
             .setDesc('⚠️ NOTE: Google heavily restricts the "Pro" models on the Free Tier. If you get an "Error 429: Rate limit exceeded" immediately when using a Pro model, you must either switch back to a Flash model or upgrade your API key to a Pay-As-You-Go billing account in Google AI Studio.');
@@ -635,15 +758,21 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
         viewEl.addEventListener('keydown', interruptScroll, { passive: true });
 
         try {
+            // Build the payload dynamically to prevent silent 400 Errors if system instructions are blank
+            const requestBody = {
+                contents: [{ parts: parts }],
+                generationConfig: { temperature: this.settings.temperature }
+            };
+
+            if (this.settings.systemInstruction && this.settings.systemInstruction.trim() !== '') {
+                requestBody.systemInstruction = { parts: [{ text: this.settings.systemInstruction }] };
+            }
+
             // We use standard fetch instead of obsidian.requestUrl so we can process the Server-Sent Events stream
             const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${this.settings.model}:streamGenerateContent?alt=sse&key=${this.settings.apiKey}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    systemInstruction: { parts: [{ text: this.settings.systemInstruction }] },
-                    contents: [{ parts: parts }],
-                    generationConfig: { temperature: this.settings.temperature }
-                }),
+                body: JSON.stringify(requestBody),
                 signal: this.abortController.signal
             });
 
@@ -653,11 +782,20 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
                 try {
                     const errJson = JSON.parse(errText);
                     if (errJson.error && errJson.error.message) {
-                        errorMsg += `: ${errJson.error.message}`;
+                        errorMsg += `:\n${errJson.error.message}`;
+                    } else {
+                        errorMsg += `:\n${errText}`;
                     }
-                } catch (e) {}
+                } catch (e) {
+                    errorMsg += `:\n${errText}`;
+                }
+                
                 this.revertLoadingState(editor, action, insertLoadingText, replaceLoadingText);
-                new obsidian.Notice(errorMsg);
+                console.error("Full Gemini API Error:", errText);
+                
+                // Show the exact API error natively in Obsidian for 10 seconds so the user can actually read it
+                new obsidian.Notice(`Gemini AI Commander Failed:\n${errorMsg}`, 10000);
+                
                 this.abortController = null;
                 return;
             }
@@ -754,9 +892,11 @@ class GeminiAICommanderPlugin extends obsidian.Plugin {
             if (error.name === 'AbortError') {
                 new obsidian.Notice("Gemini processing was successfully cancelled.");
             } else {
-                console.error("Gemini API Error:", error);
+                console.error("Gemini Plugin Execution Error:", error);
                 this.revertLoadingState(editor, action, insertLoadingText, replaceLoadingText);
-                new obsidian.Notice('Network Error: Failed to connect to Google API. Are you connected to the internet?');
+                
+                // Show the exact internal JavaScript error natively in Obsidian 
+                new obsidian.Notice(`Execution Error:\n${error.message}\n\n(Check Developer Console for full details)`, 10000);
             }
         } finally {
             this.abortController = null;
