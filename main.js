@@ -84,9 +84,9 @@ class GeminiSettingTab extends obsidian.PluginSettingTab {
         
         // Append the clickable version link right next to the title
         const versionLink = titleEl.createEl('a', { 
-            text: `v${currentVersion}`, 
+            text: `${currentVersion}`, 
             // Ensures the proper GitHub compare URL format
-            href: `https://github.com/EtsefZale/obsidian_gemini-ai-commander/compare/v${previousVersion}...v${currentVersion}` 
+            href: `https://github.com/EtsefZale/obsidian_gemini-ai-commander/compare/${previousVersion}...${currentVersion}` 
         });
         versionLink.style.fontSize = '0.75em';
         versionLink.style.fontWeight = 'normal';
