@@ -45,15 +45,15 @@ To use this plugin, you will need a **free** API key from Google AI Studio.
 - **Model:** `gemini-2.5-flash` (Highly recommended! It has a massive 1-million token context window, is incredibly fast, and is very friendly to the Free Tier rate limits).
 - **Temperature:** `0.2` (Keeps the AI factual, structured, and strictly adherent to your formatting instructions).
 
-## 📦 Installation (via BRAT)
+## 📦 Installation
 
-Currently, this plugin is available via [BRAT](https://github.com/TfTHacker/obsidian42-brat) (Beta Reviewer's Auto-update Tool) before it gets submitted to the official Obsidian Community Plugins list.
+This plugin is officially available in the Obsidian Community Plugins directory!
 
-1. Install the **BRAT** plugin from the official Obsidian Community Plugins directory and enable it.
-2. Open the command palette (`Cmd/Ctrl + P`) and run the command **BRAT: Add a beta plugin for testing**.
-3. Paste the URL of this GitHub repository: `https://github.com/EtsefZale/obsidian_gemini-ai-commander`
-4. Click **Add Plugin**.
-5. Go to **Settings > Community Plugins**, find **Gemini AI Commander**, and turn it on!
+1. Open Obsidian and go to **Settings > Community Plugins**.
+2. Turn off **Restricted mode** if it is currently enabled.
+3. Click **Browse** and search for **Gemini AI Commander**.
+4. Click **Install**, then **Enable**.
+5. Go to the new **Gemini AI Commander** settings tab and enter your Google AI Studio API key.
 
 ## 🤝 Credits & Inspiration
 
