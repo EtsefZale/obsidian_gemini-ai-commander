@@ -1,5 +1,9 @@
 # Gemini AI Commander for Obsidian
 
+**THIS PLUGIN IS DEPRECATED** *(busy with college)***; FORKS ARE ALWAYS WELCOME. THANK YOU FOR USING!**
+
+---
+
 A simple, fast, and highly customizable AI assistant for your Obsidian vault, powered by the Google Gemini API. Process your notes, summarize audio lectures, and chat with your files—all without leaving your workflow.
 
 *This is my first Obsidian plugin EVER, so I hope you enjoy it!*
